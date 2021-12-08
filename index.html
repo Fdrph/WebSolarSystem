@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Solar System</title>
+<link rel="stylesheet" href="proj2.css">
+<script type="module" src="proj2.js"></script>
+<!-- ------------------------ GOURAUD ------------------------ -->
+<script id="gouraud-vertex" type="x-shader/x-vertex">
+//uniform mat4 viewMatrix;
+//uniform mat4 modelViewMatrix;
+//uniform mat4 projectionMatrix;
+//uniform mat3 normalMatrix;
+
+uniform vec3  lightPos;
+uniform vec3  lightCol;
+uniform float lightI;
+uniform float shininess;
+uniform float ambient;
+
+//attribute vec3 position;
+//attribute vec3 normal;
+//attribute vec2 uv;
+    
+//varying vec3 vertPosition;
+varying vec3 vertColor;
+varying vec3 normalV;
+
+void main()
+{
+    // normal vector in view space
+    vec3 N = normalize( normalMatrix * normal );
+    
+    // view direction in view space
+    vec3 vertPos = vec3(modelViewMatrix * vec4( position, 1.0 ));
+    vec3 eyeV = normalize( -vertPos );
+
+    // light direction in view space
+    vec3 lightPos = vec3(viewMatrix * vec4(lightPos, 1.0));
+    vec3 L = normalize(lightPos - vertPos);
+
+    // blinn-phong
+    float lambert = max(dot(N,L), 0.0);
+    vec3 H = normalize( eyeV + L);
+    float specular = pow(max(dot(N,H), 0.0), shininess) * lambert;
+
+    vec3 diffuseCol = lightCol;
+    vertColor     = (ambient * diffuseCol) + (lambert * diffuseCol * lightI) + (specular * lightCol * lightI);
+    gl_Position   = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+</script>
+<script id="gouraud-fragment" type="x-shader/x-fragment">
+varying vec3 vertColor;
+varying vec3 normalV;
+
+void main() 
+{
+    gl_FragColor = vec4(vertColor, 1.0);
+}
+</script>
+<!-- ------------------------ PHONG ------------------------ -->
+<script id="phong-vertex" type="x-shader/x-vertex">
+    //uniform mat4 viewMatrix;
+    //uniform mat4 modelViewMatrix;
+    //uniform mat4 projectionMatrix;
+    //uniform mat3 normalMatrix;
+    
+    uniform vec3  lightPos;
+    uniform vec3  lightCol;
+    uniform float lightI;
+    uniform float specI;
+    uniform float shininess;
+    uniform float ambient;
+    uniform float useNormal;
+    uniform float normalStrength;
+    
+    //attribute vec3 position;
+    //attribute vec3 normal;
+    //attribute vec2 uv;
+    attribute vec4 tangent;
+        
+    varying vec3 vertPos;
+    varying vec3 vNormal;
+    varying vec2 texUV;
+    varying vec3 vTangent;
+    varying vec3 vBiTangent;
+    
+    void main()
+    {
+        vNormal = normalMatrix * normalize(normal);
+        vertPos = vec3(modelViewMatrix * vec4( position, 1.0 ));
+        texUV = uv;
+        vTangent = normalize( normalMatrix * tangent.xyz);
+        vBiTangent = cross( vNormal, vTangent);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+</script>
+<script id="phong-fragment" type="x-shader/x-fragment">
+    uniform vec3  lightPos;
+    uniform vec3  lightCol;
+    uniform float lightI;
+    uniform float specI;
+    uniform float shininess;
+    uniform float ambient;
+    uniform float useNormal;
+    uniform float normalStrength;
+    uniform sampler2D tex;
+    uniform sampler2D texNormal;
+    
+    varying vec3 vertPos;
+    varying vec3 vNormal;
+    varying vec2 texUV;
+    varying vec3 vTangent;
+    varying vec3 vBiTangent;
+
+    void main()
+    {
+        // normal from normal map
+        vec3 N = normalize( vNormal );
+        if (useNormal > 0.5) {
+            vec3 n = texture2D( texNormal, texUV).xyz * 2.0 - 1.0;
+            n.xy *= normalStrength;
+            mat3 TBN = mat3(normalize(vTangent), normalize(vBiTangent), normalize(vNormal));
+            N = TBN * normalize(n);
+        }
+
+        // view direction in view space
+        vec3 eyeV = normalize( -vertPos );
+    
+        // light direction in view space
+        vec3 lightPos = vec3(viewMatrix * vec4(lightPos, 1.0));
+        vec3 L = normalize(lightPos - vertPos);
+    
+        // blinn-phong
+        float lambert = max(dot(N,L), 0.0);
+        vec3 H = normalize( eyeV + L);
+        float specular = pow(max(dot(N,H), 0.0), shininess) * lambert;
+    
+        vec3 diffuseCol = vec3(texture2D(tex, texUV));
+        vec3 fragColor = (ambient * diffuseCol) + (lambert * diffuseCol * lightI) + (specular * lightCol * specI);
+        gl_FragColor = vec4(fragColor, 1.0);
+    }
+</script>
+<script id="skydome-vertex" type="x-shader/x-fragment">
+varying vec2 fUV;
+//attribute vec2 uv;
+void main(){ fUV = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+</script>
+<script id="skydome-fragment" type="x-shader/x-fragment">
+uniform sampler2D sky;
+varying vec2 fUV;
+void main(){ gl_FragColor = texture2D(sky, fUV); }
+</script>
+</head>
+<body>
+<div id="loading">Loading...</div>
+</body>
+</html>
+
+
+<!-- Sources: -->
+<!-- https://svs.gsfc.nasa.gov/4851 -->
+<!-- https://svs.gsfc.nasa.gov/cgi-bin/details.cgi?aid=4720 -->
+<!-- https://asa.hmnao.com/ -->
+<!-- https://learnopengl.com/Advanced-Lighting/Normal-Mapping -->
