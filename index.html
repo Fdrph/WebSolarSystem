@@ -135,20 +135,33 @@ void main()
         vec3 H = normalize( eyeV + L);
         float specular = pow(max(dot(N,H), 0.0), shininess) * lambert;
     
-        vec3 diffuseCol = vec3(texture2D(tex, texUV));
+        vec3 diffuseCol = vec3(sRGBToLinear(texture(tex, texUV)));
         vec3 fragColor = (ambient * diffuseCol) + (lambert * diffuseCol * lightI) + (specular * lightCol * specI);
-        gl_FragColor = vec4(fragColor, 1.0);
+        fragColor = ACESFilmicToneMapping(fragColor);
+        gl_FragColor = LinearToGamma(vec4(fragColor,1.0),2.2);
     }
 </script>
-<script id="skydome-vertex" type="x-shader/x-fragment">
-varying vec2 fUV;
-//attribute vec2 uv;
-void main(){ fUV = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+<script id="skydome-vertex" type="x-shader/x-vertex">
+    varying vec2 fUV;
+    void main(){ fUV = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
 </script>
 <script id="skydome-fragment" type="x-shader/x-fragment">
-uniform sampler2D sky;
-varying vec2 fUV;
-void main(){ gl_FragColor = texture2D(sky, fUV); }
+    uniform sampler2D sky;
+    uniform float accurate;
+    varying vec2 fUV;
+    void main()
+    { 
+        vec3 fragColor = vec3(sRGBToLinear(texture(sky, fUV)));
+        fragColor *= 8.0;
+        fragColor = ACESFilmicToneMapping(fragColor);
+        gl_FragColor = LinearToGamma(vec4(fragColor,1.0),2.2);
+    }
+</script>
+<script id="sun-vertex" type="x-shader/x-vertex">
+void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+</script>
+<script id="sun-fragment" type="x-shader/x-fragment">
+void main(){ gl_FragColor = vec4(1.0,0.949,0.929,1.0); }
 </script>
 </head>
 <body>
@@ -164,3 +177,4 @@ void main(){ gl_FragColor = texture2D(sky, fUV); }
 <!-- https://learnopengl.com/Advanced-Lighting/Normal-Mapping -->
 <!-- https://ssd.jpl.nasa.gov/horizons/app.html#/ -->
 <!-- https://aa.quae.nl/en/reken/hemelpositie.html -->
+<!-- https://www.researchgate.net/publication/316558298_Date_Algorithms -->
