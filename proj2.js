@@ -4,7 +4,6 @@ import { RenderPass } from './dist/RenderPass.js';
 import { UnrealBloomPass } from './dist/UnrealBloomPass.js';
 import { Lensflare, LensflareElement } from './dist/Lensflare.js';
 import {OrbitControls} from "./dist/OrbitControls.js";
-import {GUI} from "./dist/dat.gui.module.js";
 
 var Scene, Camera, Renderer, Composer, Clock, Controls;
 var RAD = Math.PI/180;
@@ -21,8 +20,10 @@ var SunObj;
 var CurrentTimeJDN;
 var TimeMultiplier = 1;
 var InAccelTime = false;
+var InOverview = false;
+var Locked = false;
 var CurrentTarget;
-var Follow = false;
+var Init = true;
 
 var lightPos = new THREE.Vector3(0, 0, 0);
 var lightCol = new THREE.Color(0xfff2ed);
@@ -72,7 +73,7 @@ var Planets = [{
   northP: new THREE.Vector3(0.017449748351250544,-0.9993908270190958,0.030223850723657183),
   radius: 0.000040453784,
   rotatRate: 0.000000299239873848,
-  orbCol: 0xf0ea19,
+  orbCol: 0xccba7e,
   normalSt: 0.0,
   tex: "resources/images/venus.jpg",
   texN: ""},
@@ -88,7 +89,7 @@ var Planets = [{
   northP: new THREE.Vector3(0.39777518454257826,0.9174829167685455,0),
   radius: 0.0000426352,
   rotatRate: 0.00007292115024,
-  orbCol: 0x5470d9,
+  orbCol: 0x448894,
   normalSt: 1.4,
   tex: "resources/images/earth.jpg",
   texN: "resources/images/earth-specular.png"},
@@ -104,7 +105,7 @@ var Planets = [{
   northP: new THREE.Vector3(-0.0003635869817646448,0.9999999339022512,0),
   radius: 0.0000116138017,
   rotatRate: 0.0000026616995272150697,
-  orbCol: 0x5470d9,
+  orbCol: 0x6b7b8c,
   normalSt: 0.3,
   tex: "resources/images/moon.jpg",
   texN: "resources/images/moon-normal.jpg"},
@@ -120,7 +121,7 @@ var Planets = [{
   northP: new THREE.Vector3(-0.05547898385302705,0.8932556485804318,0.446112573942708),
   radius: 0.000022702195,
   rotatRate: 0.00007292115,
-  orbCol: 0xe64219,
+  orbCol: 0xa65837,
   normalSt: 1.8,
   tex: "resources/images/mars.jpg",
   texN: "resources/images/mars-normal.png"},
@@ -136,7 +137,7 @@ var Planets = [{
   northP: new THREE.Vector3(-0.03590615289334038,0.9992477137401423,-0.01465451362205603),
   radius: 0.000477894503,
   rotatRate: 0.00017734058128229422,
-  orbCol: 0xa6a6a6,
+  orbCol: 0x8a7c62,
   normalSt: 0.0,
   tex: "resources/images/jupiter.jpg",
   texN: ""},
@@ -152,7 +153,7 @@ var Planets = [{
   northP: new THREE.Vector3(0.4624261111012926,0.8825330678596439,0.08542526503312815),
   radius: 0.000402866697,
   rotatRate: 0.00017054890282933958,
-  orbCol: 0xa6a6a6,
+  orbCol: 0x99a37c,
   normalSt: 0.0,
   tex: "resources/images/saturn.jpg",
   texR: "resources/images/saturn-rings.png",
@@ -169,7 +170,7 @@ var Planets = [{
   northP: new THREE.Vector3(0.9679684004416559,-0.13433209564170154,0.21211332779184608),
   radius: 0.000170851362,
   rotatRate: 0.00010123766537166816,
-  orbCol: 0xa6a6a6,
+  orbCol: 0x5eadac,
   normalSt: 0.0,
   tex: "resources/images/uranus.jpg",
   texN: ""},
@@ -185,7 +186,7 @@ var Planets = [{
   northP: new THREE.Vector3(-0.30781771841586425,0.8819092026544161,0.35704959109723644),
   radius: 0.000165537115,
   rotatRate: 0.00010833825276190749,
-  orbCol: 0xa6a6a6,
+  orbCol: 0x30509c,
   normalSt: 0.0,
   tex: "resources/images/neptune.jpg",
   texN: ""
@@ -254,10 +255,11 @@ function goToPlanet(name) {
     Camera.position.set(planetpos.x+offset, planetpos.y+offset, planetpos.z+offset);
     Controls.target.set(planetpos.x, planetpos.y, planetpos.z);
     Controls.minDistance = minDistance;
-    if (InAccelTime) {Controls.maxDistance=0.0003;}
+    Controls.maxDistance = 50;
+    //if (InAccelTime) {Controls.maxDistance=0.0003;}
     Controls.update();
     CurrentTarget = name;
-    Follow = true;
+    InOverview = false;
   }
 }
 
@@ -465,18 +467,18 @@ function updateClock() {
   document.getElementById('time-display').innerHTML = time;
 }
 
+function isAccelTime() {
+  if (TimeMultiplier >= 100000) {
+    InAccelTime = true;
+  } else if (TimeMultiplier < 100000) {
+    InAccelTime = false;
+  }
+}
 
 
-/************************************************************************************/
-/************************************************************************************/
-/************************************************************************************/
+
 /*************************************** MAIN ***************************************/
-/************************************************************************************/
-/************************************************************************************/
-/************************************************************************************/
-
 function main() {
-  /************************** Camera **************************/
   Camera = new THREE.PerspectiveCamera(
     60,         // fov
     window.innerWidth / window.innerHeight, //aspect
@@ -493,7 +495,7 @@ function main() {
   Controls = new OrbitControls(Camera, Renderer.domElement);
   Controls.minDistance = 0.000021;
   Controls.maxDistance = 50;
-  //Camera.position.set(20,20,20);
+  Camera.position.set(1,1,1);
 
   loadManager = new THREE.LoadingManager();
   Clock = new THREE.Clock();
@@ -592,8 +594,8 @@ function main() {
       satPos:    {value: satob.object.position},
       lightCol:  {value: lightCol},
       lightI:    {value: lightI},
-      specI:     {value: 13},
-      shininess: {value: 83},
+      specI:     {value: 90},
+      shininess: {value: 34},
       ambient:   {value: 0},
       exposure:  {value: 0.042},
       useNormal: {value: 0.0},
@@ -631,21 +633,22 @@ function main() {
   }
   // And Labels
   createLabels();
+
   /************************** Helper GUI **************************/
   // const gui = new GUI();
   // const lightFolder = gui.addFolder('Sun');
   // let earthmat = PlanetObjects.find(x=> x.name == 'earth').mat;
-  // lightFolder.add(earthmat.uniforms.ambient, 'value', 0, 0.5).name('ambient');
-  // lightFolder.add(earthmat.uniforms.shininess, 'value', 0, 1024).name('shininess');
-  // lightFolder.add(earthmat.uniforms.lightI, 'value', 0, 100).name('light intensity');
-  // lightFolder.add(earthmat.uniforms.specI, 'value', 0, 500).name('specular intensity');
-  // lightFolder.add(earthmat.uniforms.exposure, 'value', 0, 0.07).name('shaderExposure');
-  // lightFolder.add(planetMat.uniforms.useNormal, 'value', 0, 1).name('Toggle normal map');
+  // lightFolder.add(ringmat.uniforms.ambient, 'value', 0, 0.5).name('ambient');
+  // lightFolder.add(ringmat.uniforms.shininess, 'value', 0, 1024).name('shininess');
+  // lightFolder.add(ringmat.uniforms.lightI, 'value', 0, 100).name('light intensity');
+  // lightFolder.add(ringmat.uniforms.specI, 'value', 0, 500).name('specular intensity');
+  // lightFolder.add(ringmat.uniforms.exposure, 'value', 0, 0.07).name('shaderExposure');
+  // lightFolder.add(ringmat.uniforms.useNormal, 'value', 0, 1).name('Toggle normal map');
   // lightFolder.open();
-  const axesHelper = new THREE.AxesHelper( 5 );
+  // const axesHelper = new THREE.AxesHelper( 5 );
   // Scene.add( axesHelper );
 
-  // disable culling for no hitching on texture decompress?
+  // disable culling for no hitching on texture decompress
   Scene.traverse(obj => obj.frustumCulled = false);
 
   window.addEventListener( 'resize', function () {
@@ -657,8 +660,6 @@ function main() {
 
 
   CurrentTimeJDN = UTCtoJDN(new Date());
-
-  var Start = Date.now();
   TimeMultiplier = 1;
   /************************** Animate **************************/
   var delta = 0;
@@ -677,60 +678,66 @@ function main() {
       if (p.name == 'saturn') {SaturnRings.object.rotateZ(rotSpeed*delta*TimeMultiplier);}
     }
 
-    // Labels
-    updateLabels();
-    // Axis Lines
-    updateNorthPoleVectors();
-
     // Planet movement in its orbit
     for (const planet of PlanetObjects) {
       let name = planet.name;
-      if(name=='moon'){continue}
       let vars = Planets.find(x=> x.name == name);
       
       let M0 = vars.obP.M0;
       let M = M0 + vars.obP.N * (CurrentTimeJDN-D0);
-      let pos = posInOrbit(vars.obP, normalizeAngle(M));
-      
-      if (name == 'earth') {
-        let moon = Planets.find(x=> x.name == 'moon');
-        let moonobj = PlanetObjects.find(x=> x.name == 'moon').object;
-        let orbit = Orbits.find(x=>x.name == 'moon').object;
-        let mp = posInOrbit(moon.obP, M);
-        moonobj.position.set(mp.x+pos.x,mp.y+pos.y,mp.z+pos.z);
-        orbit.position.set(pos.x,pos.y,pos.z);
-      }
+      var pos = posInOrbit(vars.obP, normalizeAngle(M));
+
       planet.object.position.set(pos.x,pos.y,pos.z);
       if (name == 'saturn') {SaturnRings.object.position.set(pos.x,pos.y,pos.z);}
     }
+    // moon and moon orbit movement
+    let moon = Planets.find(x=> x.name == 'moon');
+    let moonobj = PlanetObjects.find(x=> x.name == 'moon').object;
+    let e = PlanetObjects.find(x=> x.name == 'earth').object.position;
+    let orbit = Orbits.find(x=>x.name == 'moon').object;
+    let M = moon.obP.M0 + moon.obP.N * (CurrentTimeJDN-D0);
+    let mp = posInOrbit(moon.obP, normalizeAngle(M));
+    moonobj.position.set(e.x+mp.x,e.y+mp.y,e.z+mp.z);
+    orbit.position.set(e.x,e.y,e.z);
 
     // Camera
-    if (TimeMultiplier >= 100) {
-      Follow = true;
-    }
-    if (Follow) {
+    isAccelTime();
+    if (Init) { goToPlanet('earth'); Init = false; }
+    if (!InAccelTime && !InOverview && !Locked) {
       let lk = PlanetObjects.find(x=> x.name == CurrentTarget);
       Controls.target.set(lk.object.position.x, lk.object.position.y, lk.object.position.z);
       Controls.update();
     }
-    
+    if (Locked) {
+      let p = PlanetObjects.find(x=> x.name == CurrentTarget).object;
+      let r = Planets.find(x=> x.name == CurrentTarget).radius;
+      Controls.target.set(p.position.x, p.position.y, p.position.z);
+      let dir = new THREE.Vector3(p.position.x,p.position.y,p.position.z);
+      dir.normalize().negate();
+      Camera.position.set(p.position.x+dir.x*r*6, p.position.y+dir.y*r*6, p.position.z+dir.z*r*6);
+      Controls.maxDistance = 50;
+      Controls.minDistance = 0.000001;
+      Controls.update();
+    }
 
+
+    // Labels
+    updateLabels();
+    // Axis Lines
+    updateNorthPoleVectors();
     Composer.render();
   }
 
   loadManager.onLoad = function () {
     document.getElementById('loading').remove();
-    goToPlanet('earth');
     animate();
   };
 }
 main();
 
 
-//console.log(JDNtoUTC(2459561.2252315).getMinutes());
 
-
-/************************** Options Menu **************************/
+/************************** Options UI **************************/
 // Toggle Drawing North Pole Vectors
 var checkbox = document.getElementById('draw-north-poles');
 checkbox.addEventListener('change', function(){
@@ -754,7 +761,7 @@ var suncheckbox = document.getElementById('real-sun-size');
 suncheckbox.addEventListener('change', function(){
   if(this.checked){
     SunFlare.visible = false;
-    SunObj.visible = true;
+    SunObj.visible = false;
   } else { 
     SunFlare.visible = true;
     SunObj.visible = false; 
@@ -769,10 +776,23 @@ labelscheckbox.addEventListener('change', function(){
     for (const l of Labels) {l.sprite.visible = false;}
   }
 });
+// Follow planet
+var followcheckbox = document.getElementById('follow-planet');
+followcheckbox.addEventListener('change', function(){
+  if(this.checked && CurrentTarget != null){
+    Locked = true;
+  } else { 
+    this.checked = false;
+    Locked = false;
+    goToPlanet(CurrentTarget);
+  }
+});
 // Go to planet
 var elements = document.getElementsByClassName('gotoplanet');
 for (const e of elements) {
   e.addEventListener('click', function(){
+    if(InAccelTime) {return;}
+    if(Locked) {return;}
     let name = this.innerHTML;
     name = name.toLowerCase();
     goToPlanet(name);
@@ -781,10 +801,14 @@ for (const e of elements) {
 // Go to overview
 var overview = document.getElementById('goto-overview');
 overview.addEventListener('click', function(){
-    Follow = false;
+    if(Locked) {return;}
     Camera.position.set(13,13,13);
     Controls.target.set(0,0,0);
+    Controls.maxDistance = 50;
     Controls.update();
+    InOverview = true;
+    CurrentTarget = null;
+    Locked = false;
 });
 // Reset time multiplier
 var bttnRst = document.getElementById('reset');

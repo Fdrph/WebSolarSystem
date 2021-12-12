@@ -535,7 +535,7 @@ void main()
         if (dot(N, L) > 0.0) { // light source on the wrong side?
            forwardTranslucency = vec3(0.0, 0.0, 0.0);
         } else {
-           forwardTranslucency = lightCol  * lightI * diffuseCol * pow(max(0.0,dot(-L, eyeV)), shininess);
+           forwardTranslucency = lightCol  * lightI * 3.0 * diffuseCol * pow(max(0.0,dot(-L, eyeV)), shininess);
         }
 
         // Shadow test
@@ -638,6 +638,15 @@ void main(){ gl_FragColor = vec4(1.0,0.949,0.929,1.0); }
             <div class="checkmark-container">
                 <label class="container">
                     <input type="checkbox" id="real-sun-size">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+        </div>
+        <div class="checkmark-option">
+            <div class="checkmark-title">Lock camera to planet</div>
+            <div class="checkmark-container">
+                <label class="container">
+                    <input type="checkbox" id="follow-planet">
                     <span class="checkmark"></span>
                 </label>
             </div>
