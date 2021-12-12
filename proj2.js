@@ -2,7 +2,7 @@ import * as THREE from "./dist/three.module.js";
 import { EffectComposer } from './dist/EffectComposer.js';
 import { RenderPass } from './dist/RenderPass.js';
 import { UnrealBloomPass } from './dist/UnrealBloomPass.js';
-import { Lensflare, LensflareElement } from './dist/Lensflare.js';
+import { Lensflare, LensflareElement } from './dist/LensFlare.js';
 import {OrbitControls} from "./dist/OrbitControls.js";
 
 var Scene, Camera, Renderer, Composer, Clock, Controls;
