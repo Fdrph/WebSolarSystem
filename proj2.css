@@ -2,6 +2,7 @@ body {
     margin: 0;
     font-family: sans-serif;
 }
+  
 #loading {
     z-index: 100;
     position: fixed;
@@ -22,7 +23,7 @@ body {
     z-index: 1;
     position: fixed;
     width: 233px;
-    height: 700px;
+    height: 761px;
     min-height: 700px;
     max-height: 100%;
     background:rgb(14, 14, 14);
@@ -63,8 +64,123 @@ body {
 .gotoplanet:active {
     background-color: #2a2a2aa1;
 }
+.goto-overview {
+    text-align: center;
+    height: 25px;
+    padding: 10px;
+    font-size: 21px;
+}
+.goto-overview:hover {
+    background-color: #1f1f1fa1;
+    cursor:pointer;
+}
+
+.goto-overview:active {
+    background-color: #2a2a2aa1;
+}
 
 
+#time-panel {
+  z-index: 1;
+  position: fixed;
+  width: 210px;
+  height: 220px;
+  background:rgb(14, 14, 14);
+  color: #c6c6c6;
+  top: 0px;
+  left: 50%;
+  margin: -107px 0 0 -106px;
+  border-radius: 15px;
+  user-select: none;
+  opacity: 90%;
+}
+@media all and (max-width: 1039px) {
+  #time-panel{
+      left: 523px;
+  }
+}
+#date-display {
+  position: fixed;
+  top: 0px;
+  left: 50%;
+  margin: 16px 0 0 -86px;
+  font-size: 20px;
+}
+#date-text {
+  display: inline-block;
+  margin: 0 auto;
+  padding: 3px;
+}
+@media all and (max-width: 1039px) {
+  #date-display{
+      left: 523px;
+  }
+}
+#time-display {
+  position: fixed;
+  top: 50px;
+  left: 50%;
+  margin: 0px 0 0 -86px;
+  font-size: 44px;
+  color: white;
+}
+@media all and (max-width: 1039px) {
+  #time-display{
+      left: 523px;
+  }
+}
+.time-button {
+  z-index: 1;
+  position: relative;
+  width: 57px;
+  height: 59px;
+  background:rgb(14 14 14 / 75%);
+  color: #c6c6c6;
+  top: 107px;
+  left: 212px;
+  border-radius: 15px;
+  user-select: none;
+  opacity: 90%;
+  text-align: center;
+}
+.time-button:hover {
+  background: rgb(30 30 30 / 75%);
+  cursor: pointer;
+}
+#reset {
+  line-height: 49px;
+  font-size: 48px;
+}
+#f1 {
+  line-height: 61px;
+  font-size: 48px;
+  top: 48px;
+  left: 271px;
+}
+#f2 {
+  line-height: 61px;
+  font-size: 43px;
+  top: -11px;
+  left: 330px;
+}
+#current {
+  line-height: 54px;
+  font-size: 39px;
+  top: -69px;
+  left: -59px;
+}
+#b1 {
+  line-height: 58px;
+  font-size: 46px;
+  top: -128px;
+  left: -118px;
+}
+#b2 {
+  line-height: 61px;
+  font-size: 43px;
+  top: -187px;
+  left: -177px;
+}
 
 
 

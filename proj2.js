@@ -2,20 +2,34 @@ import * as THREE from "./dist/three.module.js";
 import { EffectComposer } from './dist/EffectComposer.js';
 import { RenderPass } from './dist/RenderPass.js';
 import { UnrealBloomPass } from './dist/UnrealBloomPass.js';
+import { Lensflare, LensflareElement } from './dist/Lensflare.js';
 import {OrbitControls} from "./dist/OrbitControls.js";
 import {GUI} from "./dist/dat.gui.module.js";
 
 var Scene, Camera, Renderer, Composer, Clock, Controls;
 var RAD = Math.PI/180;
 var DEG = 180/Math.PI;
-var TimeMultiplier = 1;
-var IsScaleBig = false;
 
-
+var loadManager;
 var PlanetObjects = [];
-var Orbits = [];
 var NorthPoleVectors = [];
+var Orbits = [];
+var Labels = [];
 var SaturnRings;
+var SunFlare;
+var SunObj;
+var CurrentTimeJDN;
+var TimeMultiplier = 1;
+var InAccelTime = false;
+var CurrentTarget;
+var Follow = false;
+
+var lightPos = new THREE.Vector3(0, 0, 0);
+var lightCol = new THREE.Color(0xfff2ed);
+var lightI = 100;
+var specI = 0.0;
+var ambient = 0.01;
+var shininess = 1.3;
 
 const params = {
   exposure: 0.0073,
@@ -28,7 +42,7 @@ const params = {
 // Ephemeris from https://ssd.jpl.nasa.gov/horizons
 // J2000 Julian Date -> 2451545.0
 // D0 = 2021-Aug-01 00:00:00 for these ephemeris
-// and the D0 Julian Date is:
+// and its Julian Date Number is:
 var D0 = 2459427.5;
 var Planets = [{
   name: "mercury",
@@ -76,8 +90,8 @@ var Planets = [{
   rotatRate: 0.00007292115024,
   orbCol: 0x5470d9,
   normalSt: 1.4,
-  tex: "resources/images/8k_earth_daymap.jpg",
-  texN: ""},
+  tex: "resources/images/earth.jpg",
+  texN: "resources/images/earth-specular.png"},
   {
   name: "moon",
   obP: {  EC: 0.06452888410987892,   
@@ -177,6 +191,15 @@ var Planets = [{
   texN: ""
 }]
 
+// normalize angles to positive [0,360]:
+function normalizeAngle(degrees) {
+  if (degrees >= 0) {
+    return degrees % 360
+  } else {
+    return degrees % -360 + 360
+  }
+}
+
 function trueAnomaly(ec, m) {
   var l = m * (Math.PI/180);
   var u = l
@@ -190,7 +213,7 @@ function trueAnomaly(ec, m) {
   } while (Math.abs(ut - u) > 0.0000001);
   var eccentric_anomaly = u;
   var ta = 2 * Math.atan(Math.sqrt((1 + ec) / (1 - ec)) * Math.tan(eccentric_anomaly / 2));
-  return 360+(DEG)*ta;
+  return normalizeAngle(DEG*ta);
 }
 
 function posInOrbit(ob, M) {
@@ -221,18 +244,20 @@ function createOrbit(ob) {
   Orbits.push({name: ob.name, object: orbit});
 }
 
-function goToPlanet(name, isScaleBig) {
+function goToPlanet(name) {
   let r = Planets.find(x=> x.name == name).radius;
   let planet = PlanetObjects.find(x=> x.name == name);
   if (planet) {
     let offset = r*1.8;
     let minDistance = r*1.4;
-    if (isScaleBig) {offset = 0.3;}
     let planetpos = planet.object.position;
     Camera.position.set(planetpos.x+offset, planetpos.y+offset, planetpos.z+offset);
     Controls.target.set(planetpos.x, planetpos.y, planetpos.z);
     Controls.minDistance = minDistance;
+    if (InAccelTime) {Controls.maxDistance=0.0003;}
     Controls.update();
+    CurrentTarget = name;
+    Follow = true;
   }
 }
 
@@ -258,7 +283,7 @@ function latLongToVector(ra, dec) {
 }
 
 // Julian day from UTC date
-function jdcalc(jd) {
+function UTCtoJDN(jd) {
   var y =  jd.getUTCFullYear();  //year
   var m =  jd.getUTCMonth()+1;   //month
   var d =  jd.getUTCDate();      //day
@@ -279,7 +304,7 @@ function jdcalc(jd) {
 }
 
 // UTC date from Julian day
-function datefromjd(julian) {
+function JDNtoUTC(julian) {
   var jd = julian;
   var jd0 = jd + 0.5
   var z = Math.floor(jd0)
@@ -312,23 +337,133 @@ function datefromjd(julian) {
   var utht = Math.floor(24.0 * (dayt - Math.floor(dayt)))
   var utmt = Math.floor(1440.0 * (dayt - Math.floor(dayt) - utht / 24.0))
   var utst = 86400.0 * (dayt - Math.floor(dayt) - utht / 24.0 - utmt / 1440.0)
-  return  new Date(yr,mon,Math.floor(dayt),utht,utmt,utst)
+  return  new Date(yr,mon-1,Math.floor(dayt),utht,utmt,utst)
 }
 
-function createNorthPoleVector(planetPos, northP, length) {
+function createNorthPoleVector(name, planetPos, northP, length) {
   let finalPos = planetPos.clone();
   northP = northP.multiplyScalar(length);
   finalPos = finalPos.add(northP);
-  let vecgeo = new THREE.BufferGeometry().setFromPoints( [planetPos,finalPos] );
+  let vector = new THREE.Vector3(finalPos.x-planetPos.x,finalPos.y-planetPos.y,finalPos.z-planetPos.z);
+  let vecgeo = new THREE.BufferGeometry().setFromPoints( [new THREE.Vector3(0,0,0),vector] );
   let vec = new THREE.Line( vecgeo, new THREE.LineBasicMaterial({toneMapped: false}) );
   vec.visible = false;
+  vec.position.set(planetPos.x,planetPos.y,planetPos.z);
   Scene.add(vec);
-  NorthPoleVectors.push(vec);
+  NorthPoleVectors.push({name: name, object: vec, length: length});
 }
 
+function updateNorthPoleVectors() {
+  for (const p of PlanetObjects) {
+    let np = NorthPoleVectors.find(x=> x.name == p.name);
+    np.object.position.set(p.object.position.x,p.object.position.y,p.object.position.z);
+  }
+}
 
+function createLabels() {
+  for (const planet of PlanetObjects) {
+    if(planet.name == 'moon') {continue}
+    let name = planet.name;
+    let p = planet.object.position;
+    const map = new THREE.TextureLoader(loadManager).load('resources/images/label-'+name+'.png',()=>{
+      var spriteMaterial = new THREE.SpriteMaterial({ map: map, sizeAttenuation: false, color: 0xffffff});
+      spriteMaterial.opacity = 0.8;
+      var sprite = new THREE.Sprite( spriteMaterial );
+      let aspect = map.image.naturalWidth/map.image.naturalHeight;
+      let heightS = 0.015;
+      sprite.scale.set( heightS*aspect, heightS, 0.001);
+      sprite.position.set(p.x,p.y+0.002,p.z);
+      Scene.add( sprite );
+      Labels.push({name: name, sprite: sprite});
+    });
+  }
+}
 
+function updateLabels() {
+  for (const planet of PlanetObjects) {
+    if(planet.name == 'moon') {continue}
+    let name = planet.name;
+    let p = planet.object.position;
+    let label = Labels.find(x=> x.name == name);
+    // calculate label pos closer to screen to prevent z-fighting
+    // calc vector to camera and move along vector
+    let newp = new THREE.Vector3(p.x,p.y+0.002,p.z);
+    let l = new THREE.Vector3(Camera.position.x-newp.x,Camera.position.y-newp.y,Camera.position.z-newp.z);
+    l.multiplyScalar(0.8);
+    label.sprite.position.set(newp.x+l.x,newp.y+l.y,newp.z+l.z);
+  }
+}
 
+function createPlanetMat(planet) {
+  let useNormal = 1.0;
+  let textureN;
+  let vertex = 'phong-vertex'; let fragment = 'phong-fragment';
+  let loader = new THREE.TextureLoader(loadManager);
+  let texture = loader.load(planet.tex);
+  texture.anisotropy = 16;
+  if (planet.texN == "") {
+    textureN = texture; useNormal = 0.0;
+  } else { textureN = loader.load(planet.texN); }
+  if (planet.name == 'saturn') {
+    textureN = loader.load('resources/images/saturn-rings.png');
+    vertex = 'saturn-vertex'; fragment = 'saturn-fragment';
+  }
+  var uniforms = {
+    lightPos:  {value: lightPos},
+    lightCol:  {value: lightCol},
+    lightI:    {value: lightI},
+    specI:     {value: specI},
+    shininess: {value: shininess},
+    ambient:   {value: ambient},
+    exposure:  {value: params.exposure},
+    useNormal: {value: useNormal},
+    normalStrength: {value: planet.normalSt},
+    tex:       {value: texture},
+    texNormal: {value: textureN}
+  }
+  var planetMat = new THREE.ShaderMaterial({
+    uniforms: uniforms,
+    vertexShader: document.getElementById(vertex).textContent,
+    fragmentShader: document.getElementById(fragment).textContent
+  });
+  return planetMat
+}
+
+function createEarthMath(planet) {
+  let loader = new THREE.TextureLoader(loadManager);
+  let texture = loader.load(planet.tex);
+  let textureN = loader.load(planet.texN);
+  texture.anisotropy = 16;
+  textureN.anisotropy = 16;
+  var uniforms = {
+    lightPos:  {value: lightPos},
+    lightCol:  {value: lightCol},
+    lightI:    {value: lightI},
+    specI:     {value: 14},
+    shininess: {value: 13.3},
+    ambient:   {value: ambient},
+    exposure:  {value: 0.0103},
+    useNormal: {value: 0.0},
+    normalStrength: {value: 0.0},
+    tex:       {value: texture},
+    texNormal: {value: textureN}
+  }
+  var planetMat = new THREE.ShaderMaterial({
+    uniforms: uniforms,
+    vertexShader: document.getElementById('earth-vertex').textContent,
+    fragmentShader: document.getElementById('earth-fragment').textContent
+  });
+  return planetMat
+}
+
+function updateClock() {
+  let d = JDNtoUTC(CurrentTimeJDN);
+  let now = d.toLocaleDateString('en-US', {month: 'long',day: 'numeric', year: 'numeric'});
+  document.getElementById('date-text').innerHTML = now;
+  let time = ('0' + (d.getHours())).slice(-2)+':'+('0' + (d.getMinutes())).slice(-2)+':'+
+             ('0' + (d.getSeconds())).slice(-2);
+  document.getElementById('time-display').innerHTML = time;
+}
 
 
 
@@ -343,30 +478,24 @@ function createNorthPoleVector(planetPos, northP, length) {
 function main() {
   /************************** Camera **************************/
   Camera = new THREE.PerspectiveCamera(
-    60,        // fov
+    60,         // fov
     window.innerWidth / window.innerHeight, //aspect
     0.000004,   // near clipping
-    9010       // far clipping
+    9010        // far clipping
     );
   /************************** Renderer **************************/
   Renderer = new THREE.WebGLRenderer({ antialias: true });
   // Renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  // Renderer.toneMappingExposure = 0.022;
-  Renderer.physicallyCorrectLights = true;
   Renderer.setSize(window.innerWidth, window.innerHeight);
   Renderer.domElement.id = "canvas";
   document.body.appendChild(Renderer.domElement);
 
-  
   Controls = new OrbitControls(Camera, Renderer.domElement);
   Controls.minDistance = 0.000021;
   Controls.maxDistance = 50;
-  Camera.position.set(30,30,30);
-  Controls.target.set(0, 0, 0);
-  Controls.update();
+  //Camera.position.set(20,20,20);
 
-  const loadManager = new THREE.LoadingManager();
-  loadManager.onLoad = ()=>{ document.getElementById('loading').remove() }
+  loadManager = new THREE.LoadingManager();
   Clock = new THREE.Clock();
   Scene = new THREE.Scene();
 
@@ -380,88 +509,61 @@ function main() {
   Composer.addPass( bloomPass );
 
   /************************** Skydome **************************/
-  {
-    const loader = new THREE.TextureLoader(loadManager);
-    const texture = loader.load(
-      'resources/images/milkyWay.jpg',
-      () => {
-        const skyDome = new THREE.SphereGeometry(9000, 64, 64);
-        texture.anisotropy = 8;
-        let uniforms = {sky: {value: texture}}
-        const material = new THREE.ShaderMaterial({
-          uniforms: uniforms,
-          vertexShader: document.getElementById('skydome-vertex').textContent,
-          fragmentShader: document.getElementById('skydome-fragment').textContent
-        });
-        const sky = new THREE.Mesh(skyDome, material);
-        sky.material.side = THREE.BackSide;
-        // We rotate the milky way sky so that it's correct in the ecliptic
-        // coordinate system we are using and is accurate to real life
-        sky.rotateY(Math.PI/2);
-        sky.rotateX(-0.4090928040274); // obliquity of ecliptic in radians
-        Scene.add(sky);
-    });
-  }
-  /************************** Sun Light Param **************************/
-  {
-    var lightPos = new THREE.Vector3(0, 0, 0);
-    var lightCol = new THREE.Color(0xfff2ed);
-    var lightI = 100;
-    var specI = 0.0;
-    var ambient = 0.01;
-    var shininess = 1.3;
-    // let p = new THREE.PointLight(lightCol, lightI, 0, 0);
-    // p.position.set(0,0,0.1);
-    // Scene.add(p);
-  }
-  /************************** Create Planet Material **************************/
-  function createPlanetMat(planet) {
-      let useNormal = 1.0;
-      let textureN;
-      const loader = new THREE.TextureLoader(loadManager);
-      let texture = loader.load(planet.tex);
-      texture.anisotropy = 16;
-      if (planet.texN == "") {
-        textureN = texture; useNormal = 0.0;
-      } else { textureN = loader.load(planet.texN); }
-      var uniforms = {
-        lightPos:  {value: lightPos},
-        lightCol:  {value: lightCol},
-        lightI:    {value: lightI},
-        specI:     {value: specI},
-        shininess: {value: shininess},
-        ambient:   {value: ambient},
-        exposure:  {value: params.exposure},
-        useNormal: {value: useNormal},
-        normalStrength: {value: planet.normalSt},
-        tex:       {value: texture},
-        texNormal: {value: textureN}
-      }
-      var planetMat = new THREE.ShaderMaterial({
+  let skyloader = new THREE.TextureLoader(loadManager);
+  var texture = skyloader.load(
+    'resources/images/milkyWay.jpg',
+    () => {
+      const skyDome = new THREE.SphereGeometry(9000, 64, 64);
+      texture.anisotropy = 8;
+      let uniforms = {sky: {value: texture}}
+      const material = new THREE.ShaderMaterial({
         uniforms: uniforms,
-        vertexShader: document.getElementById('phong-vertex').textContent,
-        fragmentShader: document.getElementById('phong-fragment').textContent
+        vertexShader: document.getElementById('skydome-vertex').textContent,
+        fragmentShader: document.getElementById('skydome-fragment').textContent
       });
-      return planetMat
-    }
+      const sky = new THREE.Mesh(skyDome, material);
+      sky.material.side = THREE.BackSide;
+      // We rotate the milky way sky so that it's correct in the ecliptic
+      // coordinate system we are using and is accurate to real life
+      sky.rotateY(Math.PI/2);
+      sky.rotateX(-0.4090928040274); // obliquity of ecliptic in radians
+      Scene.add(sky);
+  });
 
+  /************************** Sun Light **************************/
 
+  SunFlare = new THREE.PointLight(lightCol, lightI, 0, 0);
+  SunFlare.position.set(0,0,0);
+
+  let sunloader = new THREE.TextureLoader(loadManager);
+  let texture0 = sunloader.load("resources/images/lensflare0.png");
+  let lensflare = new Lensflare();
+  lensflare.addElement(new LensflareElement(texture0, 200, 0));
+  SunFlare.add(lensflare);
+  Scene.add(SunFlare);
+  
   /************************** Create Sun **************************/
   let geometry = new THREE.SphereGeometry( 0.0046524726, 32, 32 );
   var sunMat = new THREE.ShaderMaterial({
     vertexShader: document.getElementById('sun-vertex').textContent,
     fragmentShader: document.getElementById('sun-fragment').textContent
   });
-  var SunMesh = new THREE.Mesh( geometry, sunMat );
-  SunMesh.position.set(0, 0, 0);
-  Scene.add( SunMesh );
+  SunObj = new THREE.Mesh( geometry, sunMat );
+  SunObj.position.set(0, 0, 0);
+  Scene.add( SunObj );
+  SunObj.visible = false;
 
-  /************************** Create Planets **************************/
+  /************************** Create Planets *********************/
   for (const planet of Planets) {
     let name = planet.name;
     let geometry = new THREE.SphereGeometry( planet.radius, 64, 64 );
     geometry.computeTangents();
-    let planetMat = createPlanetMat(planet);
+    let planetMat;
+    if(name == 'earth') {
+      planetMat = createEarthMath(planet);
+    } else {
+      planetMat = createPlanetMat(planet);
+    }
     let planetobj = new THREE.Mesh( geometry, planetMat );
     planetobj.name = name;
     var planetpos = posInOrbit(planet.obP,planet.obP.M0);
@@ -474,23 +576,42 @@ function main() {
     planetobj.position.set(planetpos.x, planetpos.y, planetpos.z);
     Scene.add(planetobj);
     PlanetObjects.push({name: name, object: planetobj, mat: planetMat});
+
   }
   // Create Saturn rings
   let sat = Planets.find(x=> x.name == 'saturn');
   let satob = PlanetObjects.find(x=> x.name == 'saturn');
   let ringgeo = new THREE.RingGeometry(0.00044719888, 0.000934679079, 64, 2);
   ringgeo.computeTangents();
-  const loader = new THREE.TextureLoader(loadManager);
-  let tex = loader.load(sat.texR);
+  let satloader = new THREE.TextureLoader(loadManager);
+  let tex = satloader.load(sat.texR);
   tex.anisotropy = 16;
-  let ringmat = new THREE.MeshLambertMaterial({map: tex, transparent: true, emissiveMap: tex, side: THREE.DoubleSide, emissive: new THREE.Color(1,1,1), emissiveIntensity: 1.6});
+  var ringmat = new THREE.ShaderMaterial({
+    uniforms: {
+      lightPos:  {value: lightPos},
+      satPos:    {value: satob.object.position},
+      lightCol:  {value: lightCol},
+      lightI:    {value: lightI},
+      specI:     {value: 13},
+      shininess: {value: 83},
+      ambient:   {value: 0},
+      exposure:  {value: 0.042},
+      useNormal: {value: 0.0},
+      normalStrength: {value: 0.0},
+      tex:       {value: tex},
+      depth:     {value: null}},
+    side: THREE.DoubleSide,
+    transparent: true,
+    vertexShader: document.getElementById('rings-vertex').textContent,
+    fragmentShader: document.getElementById('rings-fragment').textContent
+  });
   let ring = new THREE.Mesh(ringgeo, ringmat);
   ring.position.set(0,0,0);
-  // ring.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(1,0,0));
   ring.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),sat.northP);
   ring.position.set(satob.object.position.x, satob.object.position.y, satob.object.position.z);
   Scene.add(ring);
   SaturnRings = {object: ring, mat: ringmat};
+
   /************************** Create Orbits **************************/
   for (const planet of Planets) {
     createOrbit(planet);
@@ -501,37 +622,31 @@ function main() {
     }
   }
 
-  /************************** Create North Poles **************************/
+  /************************** Create Rot Axis **************************/
   for (const planet of PlanetObjects) {
     let name = planet.name;
     let p = Planets.find(x=> x.name == name);
     let length = p.radius*2;
-    createNorthPoleVector(planet.object.position, p.northP, length);
+    createNorthPoleVector(name, planet.object.position, p.northP, length);
   }
-
+  // And Labels
+  createLabels();
   /************************** Helper GUI **************************/
-  const gui = new GUI();
-  const lightFolder = gui.addFolder('Sun');
-  // lightFolder.add(planetMat.uniforms.ambient, 'value', 0, 0.5).name('ambient');
-  // lightFolder.add(planetMat.uniforms.shininess, 'value', 0, 512).name('shininess');
-  // lightFolder.add(planetMat.uniforms.lightI, 'value', 0, 100).name('light intensity');
-  // lightFolder.add(planetMat.uniforms.specI, 'value', 0, 8).name('specular intensity');
+  // const gui = new GUI();
+  // const lightFolder = gui.addFolder('Sun');
+  // let earthmat = PlanetObjects.find(x=> x.name == 'earth').mat;
+  // lightFolder.add(earthmat.uniforms.ambient, 'value', 0, 0.5).name('ambient');
+  // lightFolder.add(earthmat.uniforms.shininess, 'value', 0, 1024).name('shininess');
+  // lightFolder.add(earthmat.uniforms.lightI, 'value', 0, 100).name('light intensity');
+  // lightFolder.add(earthmat.uniforms.specI, 'value', 0, 500).name('specular intensity');
+  // lightFolder.add(earthmat.uniforms.exposure, 'value', 0, 0.07).name('shaderExposure');
   // lightFolder.add(planetMat.uniforms.useNormal, 'value', 0, 1).name('Toggle normal map');
-  let p = PlanetObjects.find(x=> x.name == 'moon');
-  lightFolder.add(p.mat.uniforms.normalStrength, 'value', 0, 4).name('Normal Strength');
-  // lightFolder.add(planetMat.uniforms.exposure, 'value', 0, 0.07).name('shaderExposure');
-  gui.add( params, 'bloomStrength', 0.0, 0.5 ).onChange( function ( value ) {
-    bloomPass.strength = Number( value );
-  } );
-  gui.add( params, 'bloomRadius', 0.0, 4.0 ).step( 0.01 ).onChange( function ( value ) {
-    bloomPass.radius = Number( value );
-  } );
-  lightFolder.open();
+  // lightFolder.open();
   const axesHelper = new THREE.AxesHelper( 5 );
   // Scene.add( axesHelper );
 
-
-  // Scene.traverse(obj => obj.frustumCulled = false);
+  // disable culling for no hitching on texture decompress?
+  Scene.traverse(obj => obj.frustumCulled = false);
 
   window.addEventListener( 'resize', function () {
     Camera.aspect = window.innerWidth / window.innerHeight;
@@ -540,43 +655,79 @@ function main() {
     Composer.setSize( window.innerWidth, window.innerHeight );
   }, false ); 
 
+
+  CurrentTimeJDN = UTCtoJDN(new Date());
+
+  var Start = Date.now();
+  TimeMultiplier = 1;
   /************************** Animate **************************/
   var delta = 0;
   function animate() {
     requestAnimationFrame(animate);
     delta = Clock.getDelta();
+
+    // update current JDN and page clock
+    CurrentTimeJDN += (delta/86400)*TimeMultiplier;
+    updateClock();
     
-    TimeMultiplier = 800;
     //Planet Rotation
     for (const p of PlanetObjects) {
       let rotSpeed = Planets.find(x=> x.name == p.name).rotatRate;
       p.object.rotateY(rotSpeed*delta*TimeMultiplier);
+      if (p.name == 'saturn') {SaturnRings.object.rotateZ(rotSpeed*delta*TimeMultiplier);}
+    }
+
+    // Labels
+    updateLabels();
+    // Axis Lines
+    updateNorthPoleVectors();
+
+    // Planet movement in its orbit
+    for (const planet of PlanetObjects) {
+      let name = planet.name;
+      if(name=='moon'){continue}
+      let vars = Planets.find(x=> x.name == name);
+      
+      let M0 = vars.obP.M0;
+      let M = M0 + vars.obP.N * (CurrentTimeJDN-D0);
+      let pos = posInOrbit(vars.obP, normalizeAngle(M));
+      
+      if (name == 'earth') {
+        let moon = Planets.find(x=> x.name == 'moon');
+        let moonobj = PlanetObjects.find(x=> x.name == 'moon').object;
+        let orbit = Orbits.find(x=>x.name == 'moon').object;
+        let mp = posInOrbit(moon.obP, M);
+        moonobj.position.set(mp.x+pos.x,mp.y+pos.y,mp.z+pos.z);
+        orbit.position.set(pos.x,pos.y,pos.z);
+      }
+      planet.object.position.set(pos.x,pos.y,pos.z);
+      if (name == 'saturn') {SaturnRings.object.position.set(pos.x,pos.y,pos.z);}
+    }
+
+    // Camera
+    if (TimeMultiplier >= 100) {
+      Follow = true;
+    }
+    if (Follow) {
+      let lk = PlanetObjects.find(x=> x.name == CurrentTarget);
+      Controls.target.set(lk.object.position.x, lk.object.position.y, lk.object.position.z);
+      Controls.update();
     }
     
-    // Renderer.render(Scene, Camera);
+
     Composer.render();
   }
-  animate();
+
+  loadManager.onLoad = function () {
+    document.getElementById('loading').remove();
+    goToPlanet('earth');
+    animate();
+  };
 }
 main();
 
-goToPlanet('jupiter', false);
 
-// consolelog(jdcalc(new Date()));
-// console.log(datefromjd(2459427.5003704));
-
-
-// MAKE SURE TO DO THIS FOR CORRECT ANIMATION
-// do this after calculating M for a certain date
-// and after calculating true anomaly?
-// normalize angles to positive [0,360]:
-// if (degree >= 0) {
-//   degree % 360
-// } else {
-//   degree % -360 + 360
-// }
-
-
+//console.log(JDNtoUTC(2459561.2252315).getMinutes());
 
 
 /************************** Options Menu **************************/
@@ -584,9 +735,9 @@ goToPlanet('jupiter', false);
 var checkbox = document.getElementById('draw-north-poles');
 checkbox.addEventListener('change', function(){
   if(this.checked){
-    for (const obj of NorthPoleVectors) {obj.visible = true;}
+    for (const np of NorthPoleVectors) {np.object.visible = true;}
   } else {
-    for (const obj of NorthPoleVectors) {obj.visible = false;}
+    for (const np of NorthPoleVectors) {np.object.visible = false;}
   }
 });
 // Toggle Drawing Orbits
@@ -598,12 +749,71 @@ orbcheckbox.addEventListener('change', function(){
     for (const obj of Orbits) {obj.object.visible = false;}
   }
 });
+// Toggle real sun size in sky
+var suncheckbox = document.getElementById('real-sun-size');
+suncheckbox.addEventListener('change', function(){
+  if(this.checked){
+    SunFlare.visible = false;
+    SunObj.visible = true;
+  } else { 
+    SunFlare.visible = true;
+    SunObj.visible = false; 
+  }
+});
+// Toggle Labels
+var labelscheckbox = document.getElementById('draw-labels');
+labelscheckbox.addEventListener('change', function(){
+  if(this.checked){
+    for (const l of Labels) {l.sprite.visible = true;}
+  } else { 
+    for (const l of Labels) {l.sprite.visible = false;}
+  }
+});
 // Go to planet
 var elements = document.getElementsByClassName('gotoplanet');
 for (const e of elements) {
   e.addEventListener('click', function(){
     let name = this.innerHTML;
     name = name.toLowerCase();
-    goToPlanet(name, IsScaleBig);
+    goToPlanet(name);
   });
 }
+// Go to overview
+var overview = document.getElementById('goto-overview');
+overview.addEventListener('click', function(){
+    Follow = false;
+    Camera.position.set(13,13,13);
+    Controls.target.set(0,0,0);
+    Controls.update();
+});
+// Reset time multiplier
+var bttnRst = document.getElementById('reset');
+bttnRst.addEventListener('click', function(){
+  TimeMultiplier = 1;
+});
+// Time x100
+var bttnRst = document.getElementById('f1');
+bttnRst.addEventListener('click', function(){
+  TimeMultiplier += 100;
+});
+// Time x100,000
+var bttnRst = document.getElementById('f2');
+bttnRst.addEventListener('click', function(){
+  TimeMultiplier += 100000;
+});
+// Set time to now
+var bttnRst = document.getElementById('current');
+bttnRst.addEventListener('click', function(){
+  CurrentTimeJDN = UTCtoJDN(new Date());
+  TimeMultiplier = 1;
+});
+// Time -x100
+var bttnRst = document.getElementById('b1');
+bttnRst.addEventListener('click', function(){
+  TimeMultiplier += -100;
+});
+// Time -x100,000
+var bttnRst = document.getElementById('b2');
+bttnRst.addEventListener('click', function(){
+  TimeMultiplier += -100000;
+});

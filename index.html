@@ -165,6 +165,393 @@ void main()
         gl_FragColor = LinearToGamma(vec4(fragColor,1.0),2.2);
     }
 </script>
+<script id="earth-vertex" type="x-shader/x-vertex">
+    //uniform mat4 viewMatrix;
+    //uniform mat4 modelViewMatrix;
+    //uniform mat4 projectionMatrix;
+    //uniform mat3 normalMatrix;
+    
+    uniform vec3  lightPos;
+    uniform vec3  lightCol;
+    uniform float lightI;
+    uniform float specI;
+    uniform float shininess;
+    uniform float ambient;
+    uniform float useNormal;
+    uniform float normalStrength;
+    
+    //attribute vec3 position;
+    //attribute vec3 normal;
+    //attribute vec2 uv;
+    attribute vec4 tangent;
+        
+    varying vec3 vertPos;
+    varying vec3 vNormal;
+    varying vec2 texUV;
+    varying vec3 vTangent;
+    varying vec3 vBiTangent;
+    
+    void main()
+    {
+        vNormal = normalMatrix * normalize(normal);
+        vertPos = vec3(modelViewMatrix * vec4( position, 1.0 ));
+        texUV = uv;
+        vTangent = normalize( normalMatrix * tangent.xyz);
+        vBiTangent = cross( vNormal, vTangent);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+</script>
+<script id="earth-fragment" type="x-shader/x-fragment">
+    uniform vec3  lightPos;
+    uniform vec3  lightCol;
+    uniform float lightI;
+    uniform float specI;
+    uniform float shininess;
+    uniform float ambient;
+    uniform float useNormal;
+    uniform float normalStrength;
+    uniform float exposure;
+    uniform sampler2D tex;
+    uniform sampler2D texNormal;
+    
+    varying vec3 vertPos;
+    varying vec3 vNormal;
+    varying vec2 texUV;
+    varying vec3 vTangent;
+    varying vec3 vBiTangent;
+
+    
+    vec3 RRTAndODTFitt( vec3 v ) {
+        vec3 a = v * ( v + 0.0245786 ) - 0.000090537;
+        vec3 b = v * ( 0.983729 * v + 0.4329510 ) + 0.238081;
+        return a / b;
+    }
+
+    vec3 ACESToneMapping( vec3 color ) {
+        const mat3 ACESInputMat = mat3(
+            vec3( 0.59719, 0.07600, 0.02840 ), vec3( 0.35458, 0.90834, 0.13383 ),
+            vec3( 0.04823, 0.01566, 0.83777 )
+        );
+        const mat3 ACESOutputMat = mat3(
+            vec3(  1.60475, -0.10208, -0.00327 ), vec3( -0.53108,  1.10813, -0.07276 ),
+            vec3( -0.07367, -0.00605,  1.07602 )
+        );
+        color *= exposure / 0.6;
+        color = ACESInputMat * color;
+        color = RRTAndODTFitt( color );
+        color = ACESOutputMat * color;
+        return clamp( color, 0.0, 1.0 );
+    }
+
+    void main()
+    {
+        // normal from normal map
+        vec3 N = normalize( vNormal );
+
+        // view direction in view space
+        vec3 eyeV = normalize( -vertPos );
+    
+        // light direction in view space
+        vec3 lightPos = vec3(viewMatrix * vec4(lightPos, 1.0));
+        vec3 L = normalize(lightPos - vertPos);
+    
+        // blinn-phong
+        float lambert = max(dot(N,L), 0.0);
+        vec3 H = normalize( eyeV + L);
+        float specular = pow(max(dot(N,H), 0.0), shininess) * lambert;
+    
+        float specMap = texture2D( texNormal, texUV).x;
+
+
+        vec3 diffuseCol = vec3(sRGBToLinear(texture2D(tex, texUV)));
+        vec3 fragColor = (ambient * diffuseCol) + (lambert * diffuseCol * lightI) + (specular * lightCol * specI * specMap);
+        fragColor = ACESToneMapping(fragColor);
+        gl_FragColor = LinearToGamma(vec4(fragColor,1.0),2.2);
+    }
+</script>
+<script id="saturn-vertex" type="x-shader/x-vertex">
+    //uniform mat4 viewMatrix;
+    //uniform mat4 modelViewMatrix;
+    //uniform mat4 projectionMatrix;
+    //uniform mat3 normalMatrix;
+    
+    uniform vec3  lightPos;
+    uniform vec3  lightCol;
+    uniform float lightI;
+    uniform float specI;
+    uniform float shininess;
+    uniform float ambient;
+    uniform float useNormal;
+    uniform float normalStrength;
+    
+    //attribute vec3 position;
+    //attribute vec3 normal;
+    //attribute vec2 uv;
+    attribute vec4 tangent;
+        
+    varying vec3 vertPos;
+    varying vec3 vNormal;
+    varying vec2 texUV;
+    varying vec3 vTangent;
+    varying vec3 vBiTangent;
+    
+    void main()
+    {
+        vNormal = normalMatrix * normalize(normal);
+        vertPos = vec3(modelViewMatrix * vec4( position, 1.0 ));
+        texUV = uv;
+        vTangent = normalize( normalMatrix * tangent.xyz);
+        vBiTangent = cross( vNormal, vTangent);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+</script>
+<script id="saturn-fragment" type="x-shader/x-fragment">
+    uniform vec3  lightPos;
+    uniform vec3  lightCol;
+    uniform float lightI;
+    uniform float specI;
+    uniform float shininess;
+    uniform float ambient;
+    uniform float useNormal;
+    uniform float normalStrength;
+    uniform float exposure;
+    uniform sampler2D tex;
+    uniform sampler2D texNormal;
+    
+    varying vec3 vertPos;
+    varying vec3 vNormal;
+    varying vec2 texUV;
+    varying vec3 vTangent;
+    varying vec3 vBiTangent;
+
+    
+    vec3 RRTAndODTFitt( vec3 v ) {
+        vec3 a = v * ( v + 0.0245786 ) - 0.000090537;
+        vec3 b = v * ( 0.983729 * v + 0.4329510 ) + 0.238081;
+        return a / b;
+    }
+
+    vec3 ACESToneMapping( vec3 color ) {
+        const mat3 ACESInputMat = mat3(
+            vec3( 0.59719, 0.07600, 0.02840 ), vec3( 0.35458, 0.90834, 0.13383 ),
+            vec3( 0.04823, 0.01566, 0.83777 )
+        );
+        const mat3 ACESOutputMat = mat3(
+            vec3(  1.60475, -0.10208, -0.00327 ), vec3( -0.53108,  1.10813, -0.07276 ),
+            vec3( -0.07367, -0.00605,  1.07602 )
+        );
+        color *= exposure / 0.6;
+        color = ACESInputMat * color;
+        color = RRTAndODTFitt( color );
+        color = ACESOutputMat * color;
+        return clamp( color, 0.0, 1.0 );
+    }
+
+    vec4 linePlaneInters(vec3 p0, vec3 p1, vec3 p_co, vec3 p_no) {
+        vec3 u = p1 - p0;
+        float d = dot(p_no, u);
+        vec3 w = p0 - p_co;
+        float fac = -dot(p_no, w) / d;
+        u = u * fac;
+        return vec4(p0 + u,fac);
+    }
+
+    void main()
+    {
+        // normal from normal map
+        vec3 N = normalize( vNormal );
+        if (useNormal > 0.5) {
+            vec3 n = texture2D( texNormal, texUV).xyz * 2.0 - 1.0;
+            n.xy *= normalStrength;
+            mat3 TBN = mat3(normalize(vTangent), normalize(vBiTangent), normalize(vNormal));
+            N = TBN * normalize(n);
+        }
+
+        // view direction in view space
+        vec3 eyeV = normalize( -vertPos );
+    
+        // light direction in view space
+        vec3 lightP = vec3(viewMatrix * vec4(vec3(0.0,0.0,0.0), 1.0));
+        vec3 L = normalize(lightP - vertPos);
+    
+        // blinn-phong
+        float lambert = max(dot(N,L), 0.0);
+        vec3 H = normalize( eyeV + L);
+        float specular = pow(max(dot(N,H), 0.0), shininess) * lambert;
+    
+        vec3 satPos = vec3(-7.639031560282456,-0.12089210808894697,6.374852077443844);
+        vec3 sp = vec3(viewMatrix*vec4(satPos,1.0));
+        vec3 axisworldSpace = vec3(-0.740924226733259,0.07863303105660749,0.6669693671125927);
+        vec3 pointinplane = vec3(-0.6761738219220874,-0.06675718065681976,0.7337114155974608);
+        vec3 axis = vec3( viewMatrix * vec4(axisworldSpace,1.0));
+        vec3 point = vec3( viewMatrix * vec4(pointinplane,1.0));
+        vec4 pp = linePlaneInters(vertPos, lightP, point, axis);
+
+        float d = (pp.x-sp.x)*(pp.x-sp.x)+(pp.y-sp.y)*(pp.y-sp.y)+(pp.z-sp.z)*(pp.z-sp.z);
+        vec4 sampl = texture2D(texNormal, vec2(0.5+d,0.5+d));
+        float shadowMask = 1.0;
+        if(pp.w > 0.0 && pp.w < 1.0 && d < 0.1) {
+            shadowMask = sampl.w*1.9;
+        }
+
+
+        vec3 diffuseCol = vec3(sRGBToLinear(texture2D(tex, texUV)));
+        vec3 fragColor = (ambient * diffuseCol) + (lambert * diffuseCol * lightI) + (specular * lightCol * specI);
+        //fragColor = fragColor*shadowMask;
+        fragColor = ACESToneMapping(fragColor);
+        gl_FragColor = LinearToGamma(vec4(fragColor,1.0),2.2);
+    }
+</script>
+<script id="rings-vertex" type="x-shader/x-vertex">
+    uniform vec3  lightPos;
+    uniform vec3  lightCol;
+    uniform float lightI;
+    uniform float specI;
+    uniform float shininess;
+    uniform float ambient;
+    uniform float useNormal;
+    uniform float normalStrength;
+    
+    //attribute vec3 position;
+    //attribute vec3 normal;
+    //attribute vec2 uv;
+    attribute vec4 tangent;
+        
+    varying vec3 vertPos;
+    varying vec3 vNormal;
+    varying vec2 texUV;
+    varying vec3 vTangent;
+    varying vec3 vBiTangent;
+    
+    void main()
+    {
+        vNormal = normalMatrix * normalize(normal);
+        vertPos = vec3(modelViewMatrix * vec4( position, 1.0 ));
+        texUV = uv;
+        vTangent = normalize( normalMatrix * tangent.xyz);
+        vBiTangent = cross( vNormal, vTangent);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+</script>
+<script id="rings-fragment" type="x-shader/x-fragment">
+    uniform vec3  lightPos;
+    uniform vec3  satPos;
+    uniform vec3  lightCol;
+    uniform float lightI;
+    uniform float specI;
+    uniform float shininess;
+    uniform float ambient;
+    uniform float useNormal;
+    uniform float normalStrength;
+    uniform float exposure;
+    uniform sampler2D tex;
+    uniform sampler2D texN;
+    
+    varying vec3 vertPos;
+    varying vec3 vNormal;
+    varying vec2 texUV;
+    varying vec3 vTangent;
+    varying vec3 vBiTangent;
+    
+    vec3 RRTAndODTFitt( vec3 v ) {
+        vec3 a = v * ( v + 0.0245786 ) - 0.000090537;
+        vec3 b = v * ( 0.983729 * v + 0.4329510 ) + 0.238081;
+        return a / b;
+    }
+
+    vec3 ACESToneMapping( vec3 color ) {
+        const mat3 ACESInputMat = mat3(
+            vec3( 0.59719, 0.07600, 0.02840 ), vec3( 0.35458, 0.90834, 0.13383 ),
+            vec3( 0.04823, 0.01566, 0.83777 )
+        );
+        const mat3 ACESOutputMat = mat3(
+            vec3(  1.60475, -0.10208, -0.00327 ), vec3( -0.53108,  1.10813, -0.07276 ),
+            vec3( -0.07367, -0.00605,  1.07602 )
+        );
+        color *= exposure / 0.6;
+        color = ACESInputMat * color;
+        color = RRTAndODTFitt( color );
+        color = ACESOutputMat * color;
+        return clamp( color, 0.0, 1.0 );
+    }
+
+    // does the line formed by p1,p2 intersect sphere sc of radius r
+    bool RaySphere(vec3 p1, vec3 p2, vec3 sc, float r)
+    {
+       float a,b,c,m;
+       float bb4ac;
+       vec3 dp;
+       m = (p2.x-sc.x)*(p2.x-sc.x)+(p2.y-sc.y)*(p2.y-sc.y)+(p2.z-sc.z)*(p2.z-sc.z);
+       dp.x = p2.x - p1.x;
+       dp.y = p2.y - p1.y;
+       dp.z = p2.z - p1.z;
+       a = dp.x * dp.x + dp.y * dp.y + dp.z * dp.z;
+       b = 2. * (dp.x * (p1.x - sc.x) + dp.y * (p1.y - sc.y) + dp.z * (p1.z - sc.z));
+       c = sc.x * sc.x + sc.y * sc.y + sc.z * sc.z;
+       c += p1.x * p1.x + p1.y * p1.y + p1.z * p1.z;
+       c -= 2. * (sc.x * p1.x + sc.y * p1.y + sc.z * p1.z);
+       c -= r * r;
+       bb4ac = b * b - 4.0 * a * c;
+       if (m > a || bb4ac < 0.0) {
+          return false;
+       }
+       return true;
+    }
+
+
+    void main()
+    {
+        // backside
+        vec3 N = normalize( vNormal );
+        vec3 faceNormal = normalize(cross(dFdx(vertPos),dFdy(vertPos)));
+        if (dot (N, faceNormal) < 0.0) {
+            N *= -1.0;
+        }
+
+        // view direction in view space
+        vec3 eyeV = normalize( -vertPos );
+    
+        // light direction in view space
+        vec3 lightPos = vec3(viewMatrix * vec4(lightPos, 1.0));
+        vec3 L = normalize(lightPos - vertPos);
+    
+        // blinn-phong
+        float lambert = max(dot(N,L), 0.0);
+        vec3 H = normalize( eyeV + L);
+        float specular;
+        if (dot(N, L) < 0.0) // light source on the wrong side?
+        {
+            specular = 0.0; 
+        } else {
+            specular = pow(max(dot(N,H), 0.0), shininess) * lambert;
+        }
+        
+        vec4 smple = sRGBToLinear(texture2D(tex, texUV));
+        vec3 diffuseCol = vec3(smple);
+        
+        // Translucent illumination:
+        vec3 lambertTranslucency = lightCol * lightI * diffuseCol * max(0.0, dot(L, -N));
+        vec3 forwardTranslucency;
+        if (dot(N, L) > 0.0) { // light source on the wrong side?
+           forwardTranslucency = vec3(0.0, 0.0, 0.0);
+        } else {
+           forwardTranslucency = lightCol  * lightI * diffuseCol * pow(max(0.0,dot(-L, eyeV)), shininess);
+        }
+
+        // Shadow test
+        float shadowMask = 1.0; float alpha = 1.0;
+        vec3 satPosViewSpace = vec3(viewMatrix * vec4(satPos,1.0));
+        if (RaySphere(vertPos, lightPos, satPosViewSpace, 0.000402866697)) {
+            shadowMask = 0.0; alpha = 1.7;
+        }
+
+        vec3 fragColor = (ambient * diffuseCol) + (lambert * diffuseCol * lightI) + (specular * lightCol * specI)
+                         + lambertTranslucency + forwardTranslucency;
+        fragColor = fragColor * shadowMask;                         
+        fragColor = ACESToneMapping(fragColor);
+        gl_FragColor = LinearToGamma(vec4(fragColor,smple.w*alpha),2.2);
+    }
+</script>
 <script id="skydome-vertex" type="x-shader/x-vertex">
     varying vec2 fUV;
     void main(){ fUV = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
@@ -214,43 +601,75 @@ void main(){ gl_FragColor = vec4(1.0,0.949,0.929,1.0); }
 </script>
 </head>
 <body>
-<div id="loading">Loading...</div>
-<div id="options-panel" style="background-color: rgba(14, 14, 14, 0.6)">
-    <h1 class="options-header">Options</h1>
-    <!--  -->
-    <div class="option-border"></div>
-    <div class="checkmark-option">
-        <div class="checkmark-title">Show Orbits</div>
-        <div class="checkmark-container">
-            <label class="container">
-                <input type="checkbox" id="draw-orbits" checked>
-                <span class="checkmark"></span>
-            </label>
+    <div id="loading">Loading...</div>
+    <div id="options-panel" style="background-color: rgba(14, 14, 14, 0.6)">
+        <h1 class="options-header">Toggle view</h1>
+        <!--  -->
+        <div class="option-border"></div>
+        <div class="checkmark-option">
+            <div class="checkmark-title">Orbits</div>
+            <div class="checkmark-container">
+                <label class="container">
+                    <input type="checkbox" id="draw-orbits" checked>
+                    <span class="checkmark"></span>
+                </label>
+            </div>
         </div>
-    </div>
-    <div class="checkmark-option">
-        <div class="checkmark-title">Show Rotation Axis</div>
-        <div class="checkmark-container">
-            <label class="container">
-                <input type="checkbox" id="draw-north-poles">
-                <span class="checkmark"></span>
-            </label>
+        <div class="checkmark-option">
+            <div class="checkmark-title">Labels</div>
+            <div class="checkmark-container">
+                <label class="container">
+                    <input type="checkbox" id="draw-labels" checked>
+                    <span class="checkmark"></span>
+                </label>
+            </div>
         </div>
+        <div class="checkmark-option">
+            <div class="checkmark-title">Planet rotation axis</div>
+            <div class="checkmark-container">
+                <label class="container">
+                    <input type="checkbox" id="draw-north-poles">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+        </div>
+        <div class="checkmark-option">
+            <div class="checkmark-title">Real sun size in sky</div>
+            <div class="checkmark-container">
+                <label class="container">
+                    <input type="checkbox" id="real-sun-size">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+        </div>
+        <!--  -->
+        <div class="option-border"></div>
+        <h1 class="options-header">Go To</h1>
+        <div class="option-border"></div>
+        <div class="gotoplanet">Mercury</div>
+        <div class="gotoplanet">Venus</div>
+        <div class="gotoplanet">Earth</div>
+        <div class="gotoplanet">Moon</div>
+        <div class="gotoplanet">Mars</div>
+        <div class="gotoplanet">Jupiter</div>
+        <div class="gotoplanet">Saturn</div>
+        <div class="gotoplanet">Uranus</div>
+        <div class="gotoplanet">Neptune</div>
+        <div class="goto-overview" id="goto-overview">Overview</div>
+
+    <div id="time-panel" style="background-color: rgba(14, 14, 14, 0.6)">
+        <div class="time-button" id="reset"> &#9633 </div>
+        <div class="time-button" id="f1"> > </div>
+        <div class="time-button" id="f2"> >> </div>
+        <div class="time-button" id="current"> &#8634 </div>
+        <div class="time-button" id="b1"> < </div>
+        <div class="time-button" id="b2"> << </div>
+        <div id="date-display">
+            <div id="date-text"></div>
+        </div>
+        <div id="time-display">01:02:09</div>
+        <!-- <div id="time-display"></div> -->
     </div>
-    <!--  -->
-    <div class="option-border"></div>
-    <h1 class="options-header">Go To</h1>
-    <div class="option-border"></div>
-    <div class="gotoplanet">Mercury</div>
-    <div class="gotoplanet">Venus</div>
-    <div class="gotoplanet">Earth</div>
-    <div class="gotoplanet">Moon</div>
-    <div class="gotoplanet">Mars</div>
-    <div class="gotoplanet">Jupiter</div>
-    <div class="gotoplanet">Saturn</div>
-    <div class="gotoplanet">Uranus</div>
-    <div class="gotoplanet">Neptune</div>
-</div>
 </body>
 </html>
 
