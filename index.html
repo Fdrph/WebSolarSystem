@@ -262,6 +262,7 @@ void main()
     
         float specMap = texture2D( texNormal, texUV).x;
 
+        //specular = 0.0;
 
         vec3 diffuseCol = vec3(sRGBToLinear(texture2D(tex, texUV)));
         vec3 fragColor = (ambient * diffuseCol) + (lambert * diffuseCol * lightI) + (specular * lightCol * specI * specMap);
@@ -690,4 +691,4 @@ void main(){ gl_FragColor = vec4(1.0,0.949,0.929,1.0); }
 <!-- https://learnopengl.com/Advanced-Lighting/Normal-Mapping -->
 <!-- https://ssd.jpl.nasa.gov/horizons/app.html#/ -->
 <!-- https://aa.quae.nl/en/reken/hemelpositie.html -->
-<!-- https://www.researchgate.net/publication/316558298_Date_Algorithms -->
+<!-- https://www.researchgate.net/publication/316558298_Date_Algorithms --> -->

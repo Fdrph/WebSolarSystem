@@ -702,7 +702,7 @@ function main() {
 
     // Camera
     isAccelTime();
-    if (Init) { goToPlanet('earth'); Init = false; }
+    if (Init) { goToPlanet('saturn'); Init = false; }
     if (!InAccelTime && !InOverview && !Locked) {
       let lk = PlanetObjects.find(x=> x.name == CurrentTarget);
       Controls.target.set(lk.object.position.x, lk.object.position.y, lk.object.position.z);
