@@ -761,7 +761,7 @@ var suncheckbox = document.getElementById('real-sun-size');
 suncheckbox.addEventListener('change', function(){
   if(this.checked){
     SunFlare.visible = false;
-    SunObj.visible = false;
+    SunObj.visible = true;
   } else { 
     SunFlare.visible = true;
     SunObj.visible = false; 
