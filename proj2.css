@@ -134,7 +134,7 @@ body {
   position: relative;
   width: 57px;
   height: 59px;
-  background:rgb(14 14 14 / 75%);
+  background:rgb(24 24 24 / 75%);
   color: #c6c6c6;
   top: 107px;
   left: 212px;
@@ -144,7 +144,7 @@ body {
   text-align: center;
 }
 .time-button:hover {
-  background: rgb(30 30 30 / 75%);
+  background: rgb(35 35 35 / 75%);
   cursor: pointer;
 }
 #reset {
@@ -263,4 +263,14 @@ body {
     -webkit-transform: rotate(45deg);
     -ms-transform: rotate(45deg);
     transform: rotate(45deg);
+  }
+
+
+  #stop-i {
+    filter: invert(0.8);
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+    height: auto;
+    width: 41px;
   }

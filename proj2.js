@@ -201,6 +201,15 @@ function normalizeAngle(degrees) {
   }
 }
 
+// normalize angles to positive [0,2*PI]:
+function normalizeAngleRad(radians) {
+  if (radians >= 0) {
+    return radians % (2*Math.PI)
+  } else {
+    return (radians % (-2*Math.PI)) + 2*Math.PI
+  }
+}
+
 function trueAnomaly(ec, m) {
   var l = m * (Math.PI/180);
   var u = l
@@ -659,8 +668,15 @@ function main() {
   }, false ); 
 
 
+
   CurrentTimeJDN = UTCtoJDN(new Date());
   TimeMultiplier = 1;
+
+  // correct earth day/night cycle rotation
+  let seconds = (2459572.3513889 - CurrentTimeJDN)*86400;
+  let rot_speed = Planets.find(x=> x.name == 'earth').rotatRate;
+  let e = PlanetObjects.find(x=> x.name == 'earth').object;
+  e.rotateY(normalizeAngleRad(0.71 + seconds*rot_speed));
   /************************** Animate **************************/
   var delta = 0;
   function animate() {
@@ -828,7 +844,12 @@ bttnRst.addEventListener('click', function(){
 // Set time to now
 var bttnRst = document.getElementById('current');
 bttnRst.addEventListener('click', function(){
-  CurrentTimeJDN = UTCtoJDN(new Date());
+  let newTime = UTCtoJDN(new Date());
+  let seconds = (newTime - CurrentTimeJDN)*86400;
+  let rot_speed = Planets.find(x=> x.name == 'earth').rotatRate;
+  let e = PlanetObjects.find(x=> x.name == 'earth').object;
+  e.rotateY(normalizeAngleRad(seconds*rot_speed));
+  CurrentTimeJDN = newTime;
   TimeMultiplier = 1;
 });
 // Time -x100
