@@ -88,7 +88,7 @@ var Planets = [{
           N: 0.9855140851393105},
   northP: new THREE.Vector3(0.39777518454257826,0.9174829167685455,0),
   radius: 0.0000426352,
-  rotatRate: 0.00007292115024,
+  rotatRate: 0.0000729211585454431,
   orbCol: 0x448894,
   normalSt: 1.4,
   tex: "resources/images/earth.jpg",
@@ -673,10 +673,11 @@ function main() {
   TimeMultiplier = 1;
 
   // correct earth day/night cycle rotation
-  let seconds = (2459572.3513889 - CurrentTimeJDN)*86400;
+  let seconds = (CurrentTimeJDN - D0)*86400;
   let rot_speed = Planets.find(x=> x.name == 'earth').rotatRate;
   let e = PlanetObjects.find(x=> x.name == 'earth').object;
-  e.rotateY(normalizeAngleRad(0.71 + seconds*rot_speed));
+  e.rotateY(normalizeAngleRad(3.8));
+  e.rotateY(normalizeAngleRad(seconds*rot_speed));
   /************************** Animate **************************/
   var delta = 0;
   function animate() {
